@@ -67,7 +67,7 @@ declare -a cue_files_array
 log "${YELLOW}Scanning for .cue files in $SOURCE_DIR...${NC}"
 while IFS= read -r -d '' cue_file; do
     cue_files_array+=("$cue_file")
-done < <(find "$SOURCE_DIR" -type f -name "*.cue" -print0 | sort -z)
+done < <(find "$SOURCE_DIR" -type f -name "*.cue" ! -name "._*" -print0 | sort -z)
 
 total_files="${#cue_files_array[@]}"
 log "Found $total_files .cue files to process"
@@ -78,10 +78,10 @@ current=0
 while [[ $current -lt $total_files ]]; do
     cue_file="${cue_files_array[$current]}"
     ((current++))
-    ((total++)
+    ((total++))
     
     # Calculate percentage
-    percentage=$((current * 100 / total_files)))
+    percentage=$((current * 100 / total_files))
     
     # Get the filename without extension
     filename=$(basename "$cue_file" .cue)
