@@ -133,15 +133,15 @@ The script prints commands for:
 ---
 
 ### 4. vimms_downloader.sh
-**Vimm's Lair Batch Downloader**
+**Vimm's Lair Vault Downloader**
 
-A utility script to batch download files from Vimm's Lair using a list of URLs. It handles the download process automatically and includes necessary headers to mimic a browser request.
+A smart utility script to batch download ROMs from Vimm's Lair. Instead of requiring direct download links, it accepts standard "Vault" page URLs and automatically extracts the necessary `mediaId` to perform the download.
 
 #### Features
-- Batch download from a text file of URLs
-- Customizable output directory
-- **Automatic naming**: Uses the actual ROM filename provided by the server (e.g., `Game Name (USA).zip`)
-- Browser-mimicking headers to ensure successful downloads
+- **Auto-Extraction**: Automatically parses the `mediaId` from Vimm's Lair vault pages.
+- **Title Detection**: Extracts the game title from the page for better progress tracking.
+- **Smart Referer**: Automatically handles Referer headers and browser-mimicking to bypass download protections.
+- **Automatic naming**: Uses the actual ROM filename provided by the server.
 
 #### Usage
 ```bash
