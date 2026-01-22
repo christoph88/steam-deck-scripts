@@ -118,37 +118,101 @@ while IFS= read -r url || [ -n "$url" ]; do
   echo "Downloading from: $dl_url"
   
   # 5. Perform the actual download
-  # Simplified headers based on successful HAR
-  # --progress-bar: Uses a much cleaner #################### progress bar that spams fewer lines
-  echo "Downloading (this may take a while)..."
+  echo "Fetching file information..."
   
+  # Get total size in bytes using a HEAD request
+  total_bytes=$(curl -sI -L -b "$COOKIE_FILE" -H "User-Agent: $USER_AGENT" -H "Referer: $url" "$dl_url" | grep -i "Content-Length" | head -1 | awk '{print $2}' | tr -d '\r')
+  total_bytes=${total_bytes:-0}
+
   # Use a temporary file to check for success before naming it
   temp_file="temp_download.zip"
-  
-  http_status=$(curl -L --progress-bar -w "%{http_code}" -o "$temp_file" \
+  rm -f "$temp_file"
+
+  # Start download in background
+  # We use --silent to hide curl's own progress meter
+  # We use --write-out to capture the status code at the end
+  curl -L --silent -o "$temp_file" -w "%{http_code}" \
     -b "$COOKIE_FILE" \
-    -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8" \
-    -H "Accept-Encoding: gzip, deflate" \
+    -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7" \
+    -H "Accept-Encoding: gzip, deflate, br, zstd" \
+    -H "Accept-Language: en-US,en;q=0.9" \
+    -H "Connection: keep-alive" \
     -H "Referer: $url" \
+    -H "Sec-Fetch-Dest: document" \
+    -H "Sec-Fetch-Mode: navigate" \
+    -H "Sec-Fetch-Site: same-site" \
+    -H "Sec-Fetch-User: ?1" \
+    -H "Upgrade-Insecure-Requests: 1" \
     -H "User-Agent: $USER_AGENT" \
-    "$dl_url")
+    "$dl_url" > .status_code &
+  
+  curl_pid=$!
+  start_time=$(date +%s)
+  last_bytes=0
+  
+  # Monitoring loop
+  while kill -0 "$curl_pid" 2>/dev/null; do
+    sleep 1
+    
+    if [[ -f "$temp_file" ]]; then
+      # Get current size
+      current_bytes=$(stat -f %z "$temp_file" 2>/dev/null || stat -c %s "$temp_file" 2>/dev/null || echo 0)
+      
+      # Calculate speed
+      now=$(date +%s)
+      elapsed=$((now - start_time))
+      [[ $elapsed -eq 0 ]] && elapsed=1
+      
+      speed_bytes=$(( (current_bytes - last_bytes) ))
+      speed_fmt=$(numfmt --to=iec-i --suffix=B/s "$speed_bytes" 2>/dev/null || echo "$((speed_bytes/1024)) KiB/s")
+      last_bytes=$current_bytes
+      
+      # Progress calculation
+      if [[ "$total_bytes" -gt 0 ]]; then
+        percent=$(( current_bytes * 100 / total_bytes ))
+        bar_len=20
+        filled=$(( percent * bar_len / 100 ))
+        empty=$(( bar_len - filled ))
+        bar=$(printf "%${filled}s" | tr ' ' '#')$(printf "%${empty}s" | tr ' ' '-')
+        
+        current_fmt=$(numfmt --to=iec-i --suffix=B "$current_bytes" 2>/dev/null || echo "$((current_bytes/1024/1024)) MiB")
+        total_fmt=$(numfmt --to=iec-i --suffix=B "$total_bytes" 2>/dev/null || echo "$((total_bytes/1024/1024)) MiB")
+        
+        printf "\r[%s] %3d%% | %s / %s | %s    " "$bar" "$percent" "$current_fmt" "$total_fmt" "$speed_fmt"
+      else
+        current_fmt=$(numfmt --to=iec-i --suffix=B "$current_bytes" 2>/dev/null || echo "$((current_bytes/1024/1024)) MiB")
+        printf "\rDownloading: %s | %s    " "$current_fmt" "$speed_fmt"
+      fi
+    fi
+  done
+  echo "" # New line after progress finishes
+
+  http_status=$(cat .status_code)
+  rm -f .status_code
 
   if [[ "$http_status" -eq 200 ]]; then
-    # Try to extract filename from the headers of the actual download
-    # We'll use curl -I to get just the headers of the final URL
+    # Try to extract filename from the headers
     remote_filename=$(curl -s -I -b "$COOKIE_FILE" -H "Referer: $url" -H "User-Agent: $USER_AGENT" "$dl_url" | grep -ie "content-disposition" | sed -n 's/.*filename="\(.*\)".*/\1/p' | head -1)
     
-    # Fallback to a safe name if extraction fails
     final_filename="${remote_filename:-$clean_title.zip}"
-    # Remove any characters that might be bad for filenames
     final_filename=$(echo "$final_filename" | tr -d '\r' | sed 's/[^a-zA-Z0-9._() -]//g')
     
     mv "$temp_file" "$final_filename"
     echo "Success: Saved as $final_filename"
+
+    # Log to history
+    echo "$(date '+%Y-%m-%d %H:%M:%S') | $clean_title | $url" >> "../download_history.log"
+
+    # Comment out from source file
+    # We use sed to add a # in front of the specific URL line
+    # ESCAPED_URL handles special characters in the URL for sed
+    ESCAPED_URL=$(echo "$url" | sed 's/[\/&]/\\&/g')
+    sed -i.bak "s/^${ESCAPED_URL}/#&/" "$URL_LIST_FILE" && rm "${URL_LIST_FILE}.bak"
+
   elif [[ "$http_status" -eq 429 ]]; then
     rm -f "$temp_file"
-    echo "Error: HTTP 429 (Too Many Requests). Vimm's Lair anti-bot protection is active."
-    echo "Try again in 30-60 minutes, or use a VPN/different network."
+    echo "Error: HTTP 429 (Too Many Requests). Anti-bot protection is active."
+    echo "Wait 30-60 minutes for your IP to cool down."
   else
     rm -f "$temp_file"
     echo "Error: Download failed for $clean_title (HTTP Status: $http_status)"

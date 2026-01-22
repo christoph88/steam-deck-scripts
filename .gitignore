@@ -2,6 +2,7 @@
 vimms_urls.txt
 downloads/
 cookies.txt
+download_history.log
 
 # Log files
 *.log
