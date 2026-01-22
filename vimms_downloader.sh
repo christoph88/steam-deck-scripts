@@ -163,8 +163,16 @@ while IFS= read -r url || [ -n "$url" ]; do
       elapsed=$((now - start_time))
       [[ $elapsed -eq 0 ]] && elapsed=1
       
-      speed_bytes=$(( (current_bytes - last_bytes) ))
-      speed_fmt=$(numfmt --to=iec-i --suffix=B/s "$speed_bytes" 2>/dev/null || echo "$((speed_bytes/1024)) KiB/s")
+      speed_bytes=$((current_bytes - last_bytes))
+      if command -v numfmt >/dev/null 2>&1; then
+        speed_fmt=$(numfmt --to=iec-i --suffix=B/s "$speed_bytes")
+        current_fmt=$(numfmt --to=iec-i --suffix=B "$current_bytes")
+        total_fmt=$(numfmt --to=iec-i --suffix=B "$total_bytes")
+      else
+        speed_fmt="$((speed_bytes / 1024)) KiB/s"
+        current_fmt="$((current_bytes / 1024 / 1024)) MiB"
+        total_fmt="$((total_bytes / 1024 / 1024)) MiB"
+      fi
       last_bytes=$current_bytes
       
       # Progress calculation
@@ -175,12 +183,8 @@ while IFS= read -r url || [ -n "$url" ]; do
         empty=$(( bar_len - filled ))
         bar=$(printf "%${filled}s" | tr ' ' '#')$(printf "%${empty}s" | tr ' ' '-')
         
-        current_fmt=$(numfmt --to=iec-i --suffix=B "$current_bytes" 2>/dev/null || echo "$((current_bytes/1024/1024)) MiB")
-        total_fmt=$(numfmt --to=iec-i --suffix=B "$total_bytes" 2>/dev/null || echo "$((total_bytes/1024/1024)) MiB")
-        
         printf "\r[%s] %3d%% | %s / %s | %s    " "$bar" "$percent" "$current_fmt" "$total_fmt" "$speed_fmt"
       else
-        current_fmt=$(numfmt --to=iec-i --suffix=B "$current_bytes" 2>/dev/null || echo "$((current_bytes/1024/1024)) MiB")
         printf "\rDownloading: %s | %s    " "$current_fmt" "$speed_fmt"
       fi
     fi
