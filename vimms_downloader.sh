@@ -118,13 +118,14 @@ while IFS= read -r url || [ -n "$url" ]; do
   echo "Downloading from: $dl_url"
   
   # 5. Perform the actual download
-  # Simplified headers based on successful HAR, but removing potentially flagged ones
-  echo "Downloading..."
+  # Simplified headers based on successful HAR
+  # --progress-bar: Uses a much cleaner #################### progress bar that spams fewer lines
+  echo "Downloading (this may take a while)..."
   
   # Use a temporary file to check for success before naming it
   temp_file="temp_download.zip"
   
-  http_status=$(curl -L -w "%{http_code}" -o "$temp_file" \
+  http_status=$(curl -L --progress-bar -w "%{http_code}" -o "$temp_file" \
     -b "$COOKIE_FILE" \
     -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8" \
     -H "Accept-Encoding: gzip, deflate" \
