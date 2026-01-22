@@ -132,6 +132,32 @@ The script prints commands for:
 
 ---
 
+### 4. vimms_downloader.sh
+**Vimm's Lair Batch Downloader**
+
+A utility script to batch download files from Vimm's Lair using a list of URLs. It handles the download process automatically and includes necessary headers to mimic a browser request.
+
+#### Features
+- Batch download from a text file of URLs
+- Customizable output directory
+- **Automatic naming**: Uses the actual ROM filename provided by the server (e.g., `Game Name (USA).zip`)
+- Browser-mimicking headers to ensure successful downloads
+
+#### Usage
+```bash
+./vimms_downloader.sh [url_list_file] [output_dir]
+```
+If arguments are omitted, the script will prompt you for them. The default URL list file is `vimms_urls.txt`.
+
+#### Configuration
+- `DEFAULT_LIST`: Default text file containing URLs (default: `vimms_urls.txt`)
+- `USER_AGENT`: Custom User-Agent string for requests
+
+#### Output
+- Downloaded files are saved to the specified directory with their original filenames as provided by the server.
+
+---
+
 ## Prerequisites
 
 ### General Requirements
@@ -153,6 +179,10 @@ The script prints commands for:
 - RetroArch cores installed for desired systems
 - fzf (optional, for enhanced UI)
 
+**vimms_downloader.sh:**
+- `curl` installed
+- A text file containing direct download URLs (one per line)
+
 ---
 
 ## Installation
@@ -160,7 +190,7 @@ The script prints commands for:
 1. Clone or download these scripts to your Steam Deck
 2. Make scripts executable:
 ```bash
-chmod +x psx_batch_convert.sh psx_cleanup.sh rom_shortcut.sh
+chmod +x psx_batch_convert.sh psx_cleanup.sh rom_shortcut.sh vimms_downloader.sh
 ```
 3. Edit configuration variables in each script to match your directory structure
 4. Ensure prerequisites are installed

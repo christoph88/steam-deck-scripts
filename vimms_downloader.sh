@@ -29,20 +29,24 @@ mkdir -p "$OUTPUT_DIR"
 
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36"
 
-COUNTER=1
+# Go to output directory to save files with remote names
+cd "$OUTPUT_DIR" || exit 1
 
 while IFS= read -r url || [ -n "$url" ]; do
   # skip empty lines
   if [[ -z "$url" ]]; then continue; fi
-  output_file="${OUTPUT_DIR}/download_${COUNTER}"
-  echo "Downloading: $url -> $output_file"
-  curl -L -o "$output_file" \
+  
+  echo "Downloading: $url"
+  
+  # -L: Follow redirects
+  # -J: Use remote header name (Content-Disposition)
+  # -O: Save as file with the remote name
+  curl -L -J -O \
     -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9" \
     -H "Accept-Encoding: gzip, deflate, br" \
     -H "Connection: keep-alive" \
     -H "User-Agent: $USER_AGENT" \
     "$url"
-  ((COUNTER++))
 done < "$URL_LIST_FILE"
 
 echo "All downloads complete."
