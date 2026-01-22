@@ -46,7 +46,12 @@ fi
 mkdir -p "$OUTPUT_DIR"
 ABS_OUTPUT_DIR=$(get_abs_path "$OUTPUT_DIR")
 
-USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36"
+# Cookie file to persist session
+COOKIE_FILE="cookies.txt"
+# Clear cookies from previous runs
+rm -f "$COOKIE_FILE"
+
+USER_AGENT="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 echo "Moving to: $ABS_OUTPUT_DIR"
 cd "$ABS_OUTPUT_DIR" || exit 1
@@ -59,44 +64,98 @@ while IFS= read -r url || [ -n "$url" ]; do
   echo "---"
   echo "Processing: $url"
 
-  # 1. Fetch the vault page to get MediaId and Title
-  page_content=$(curl -s -L -H "User-Agent: $USER_AGENT" "$url")
+  # 1. Fetch the vault page to get MediaId, Title, and Download Server
+  # -c saves cookies received from the server
+  page_content=$(curl -s -L -c "$COOKIE_FILE" -H "User-Agent: $USER_AGENT" "$url")
   
   # 2. Extract MediaId
   media_id=$(echo "$page_content" | grep -oE 'name="mediaId" value="[0-9]+"' | head -1 | cut -d'"' -f4)
   
-  # 3. Extract Title (optional, for logging)
+  # 3. Extract Title
   title=$(echo "$page_content" | grep -oE '<title>[^<]+' | sed 's/<title>//' | sed 's/The Vault: //' | head -1)
+
+  # 4. Extract Download Server from the form action
+  form_tag=$(echo "$page_content" | grep -oE '<form[^>]+id="dl_form"[^>]+>' | head -1)
+  dl_server_path=$(echo "$form_tag" | grep -oE 'action="[^"]+"' | cut -d'"' -f2)
+  
+  # Handle empty extraction or missing host
+  if [[ -z "$dl_server_path" ]]; then
+    dl_url="https://dl3.vimm.net/?mediaId=${media_id}"
+  else
+    # Handle relative or protocol-relative URLs
+    if [[ "$dl_server_path" == //* ]]; then
+      dl_url="https:${dl_server_path}"
+    elif [[ "$dl_server_path" == /* ]]; then
+      dl_url="https://vimm.net${dl_server_path}"
+    else
+      dl_url="$dl_server_path"
+    fi
+
+    # Append mediaId if not present
+    if [[ "$dl_url" != *"mediaId="* ]]; then
+      if [[ "$dl_url" == *"?"* ]]; then
+        dl_url="${dl_url}&mediaId=${media_id}"
+      else
+        dl_url="${dl_url}?mediaId=${media_id}"
+      fi
+    fi
+  fi
+
+  # Clean title from HTML entities
+  clean_title=$(echo "$title" | sed 's/&#039;/'\''/g' | sed 's/&amp;/\&/g' | sed 's/&quot;/\"/g')
 
   if [[ -z "$media_id" ]]; then
     echo "Error: Could not find mediaId for $url. Skipping..."
     continue
   fi
 
-  echo "Downloading from: https://download2.vimm.net/download/?mediaId=$media_id"
+  echo "Found: $clean_title (MediaID: $media_id)"
   
-  # 4. Perform the actual download
-  # --write-out "%{http_code}": captures the status code
-  # --silent: hides the progress bar for a cleaner output, but we keep it for now for user feedback
-  # We use a temporary variable to capture the HTTP status code
-  http_status=$(curl -L -J -O -w "%{http_code}" \
-    -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9" \
-    -H "Accept-Encoding: gzip, deflate, br" \
-    -H "Connection: keep-alive" \
+  # 4. Mimic human "wait time" on page before clicking download
+  echo "Preparing download..."
+  sleep 3
+
+  echo "Downloading from: $dl_url"
+  
+  # 5. Perform the actual download
+  # Simplified headers based on successful HAR, but removing potentially flagged ones
+  echo "Downloading..."
+  
+  # Use a temporary file to check for success before naming it
+  temp_file="temp_download.zip"
+  
+  http_status=$(curl -L -w "%{http_code}" -o "$temp_file" \
+    -b "$COOKIE_FILE" \
+    -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8" \
+    -H "Accept-Encoding: gzip, deflate" \
     -H "Referer: $url" \
     -H "User-Agent: $USER_AGENT" \
-    "https://download2.vimm.net/download/?mediaId=$media_id")
+    "$dl_url")
 
   if [[ "$http_status" -eq 200 ]]; then
-    echo "Success: Download complete for $title"
+    # Try to extract filename from the headers of the actual download
+    # We'll use curl -I to get just the headers of the final URL
+    remote_filename=$(curl -s -I -b "$COOKIE_FILE" -H "Referer: $url" -H "User-Agent: $USER_AGENT" "$dl_url" | grep -ie "content-disposition" | sed -n 's/.*filename="\(.*\)".*/\1/p' | head -1)
+    
+    # Fallback to a safe name if extraction fails
+    final_filename="${remote_filename:-$clean_title.zip}"
+    # Remove any characters that might be bad for filenames
+    final_filename=$(echo "$final_filename" | tr -d '\r' | sed 's/[^a-zA-Z0-9._() -]//g')
+    
+    mv "$temp_file" "$final_filename"
+    echo "Success: Saved as $final_filename"
+  elif [[ "$http_status" -eq 429 ]]; then
+    rm -f "$temp_file"
+    echo "Error: HTTP 429 (Too Many Requests). Vimm's Lair anti-bot protection is active."
+    echo "Try again in 30-60 minutes, or use a VPN/different network."
   else
-    echo "Error: Download failed for $title (HTTP Status: $http_status)"
-    echo "Possible reasons: Session timeout, rate limiting, or file unavailable."
+    rm -f "$temp_file"
+    echo "Error: Download failed for $clean_title (HTTP Status: $http_status)"
   fi
 
-  # 5. Small delay to be polite and ensure sequential ordering
+  # 6. Polite delay - Vimm's is VERY sensitive
   echo "---"
-  sleep 2
+  sleep 10
 done < "$URL_LIST_FILE"
 
 echo "---"
