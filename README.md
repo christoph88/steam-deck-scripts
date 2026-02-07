@@ -132,32 +132,6 @@ The script prints commands for:
 
 ---
 
-### 4. vimms_downloader.sh
-**Vimm's Lair Vault Downloader**
-
-A smart utility script to batch download ROMs from Vimm's Lair. Instead of requiring direct download links, it accepts standard "Vault" page URLs and automatically extracts the necessary `mediaId` to perform the download.
-
-#### Features
-- **Auto-Extraction**: Automatically parses the `mediaId` from Vimm's Lair vault pages.
-- **Title Detection**: Extracts the game title from the page for better progress tracking.
-- **Smart Referer**: Automatically handles Referer headers and browser-mimicking to bypass download protections.
-- **Automatic naming**: Uses the actual ROM filename provided by the server.
-
-#### Usage
-```bash
-./vimms_downloader.sh [url_list_file] [output_dir]
-```
-If arguments are omitted, the script will prompt you for them. The default URL list file is `vimms_urls.txt`.
-
-#### Configuration
-- `DEFAULT_LIST`: Default text file containing URLs (default: `vimms_urls.txt`)
-- `USER_AGENT`: Custom User-Agent string for requests
-
-#### Output
-- Downloaded files are saved to the specified directory with their original filenames as provided by the server.
-
----
-
 ## Prerequisites
 
 ### General Requirements
@@ -179,10 +153,6 @@ If arguments are omitted, the script will prompt you for them. The default URL l
 - RetroArch cores installed for desired systems
 - fzf (optional, for enhanced UI)
 
-**vimms_downloader.sh:**
-- `curl` installed
-- A text file containing direct download URLs (one per line)
-
 ---
 
 ## Installation
@@ -190,7 +160,7 @@ If arguments are omitted, the script will prompt you for them. The default URL l
 1. Clone or download these scripts to your Steam Deck
 2. Make scripts executable:
 ```bash
-chmod +x psx_batch_convert.sh psx_cleanup.sh rom_shortcut.sh vimms_downloader.sh
+chmod +x psx_batch_convert.sh psx_cleanup.sh rom_shortcut.sh
 ```
 3. Edit configuration variables in each script to match your directory structure
 4. Ensure prerequisites are installed
